@@ -1,18 +1,26 @@
-import { useEffect } from 'react';
-import { LogOut, User, BarChart3 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { LogOut, User, BarChart3, Grid3X3, List, Layout } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useTodos } from '../context/TodoContext';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Separator } from '../components/ui/separator';
-import { TodoCard } from '../components/TodoCard';
+import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { KanbanBoard } from '../components/Dashboard/KanbanBoard';
+import { ListView } from '../components/Dashboard/ListView';
+import { QuickAdd } from '../components/Dashboard/QuickAdd';
 import { CreateTodoDialog } from '../components/CreateTodoDialog';
 import { TodoFilters } from '../components/TodoFilters';
 import { Pagination } from '../components/Pagination';
-import { Skeleton } from '../components/ui/skeleton';
+import { TaskStatus } from '../types';
+
+type ViewMode = 'kanban' | 'list';
 
 export const Dashboard = () => {
   const { user, logout } = useAuth();
+  const [viewMode, setViewMode] = useState<ViewMode>('kanban');
+  
   const {
     todos,
     total,
@@ -37,8 +45,17 @@ export const Dashboard = () => {
     setPage(newPage);
   };
 
+  const handleStatusChange = async (todoId: string, newStatus: TaskStatus) => {
+    try {
+      await updateTodo(todoId, { status: newStatus });
+    } catch (error) {
+      console.error('Failed to update task status:', error);
+    }
+  };
+
   const completedCount = todos.filter(todo => todo.completed).length;
   const pendingCount = todos.filter(todo => !todo.completed).length;
+  const inProgressCount = todos.filter(todo => todo.status === 'in-progress').length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -101,21 +118,36 @@ export const Dashboard = () => {
           
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pending</CardTitle>
-              <BarChart3 className="h-4 w-4 text-orange-600" />
+              <CardTitle className="text-sm font-medium">In Progress</CardTitle>
+              <BarChart3 className="h-4 w-4 text-primary" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-orange-600">{pendingCount}</div>
+              <div className="text-2xl font-bold text-primary">{inProgressCount}</div>
               <p className="text-xs text-muted-foreground">
-                Tasks remaining
+                Currently working on
               </p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Actions and Filters */}
+        {/* View Toggle and Actions */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-          <CreateTodoDialog onCreate={createTodo} />
+          <div className="flex items-center space-x-4">
+            <CreateTodoDialog onCreate={createTodo} />
+            
+            <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as ViewMode)}>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="kanban" className="flex items-center gap-2">
+                  <Layout className="h-4 w-4" />
+                  <span className="hidden sm:inline">Kanban</span>
+                </TabsTrigger>
+                <TabsTrigger value="list" className="flex items-center gap-2">
+                  <List className="h-4 w-4" />
+                  <span className="hidden sm:inline">List</span>
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
         </div>
 
         <TodoFilters
@@ -125,52 +157,50 @@ export const Dashboard = () => {
 
         <Separator className="my-6" />
 
-        {/* Todo List */}
-        {loading ? (
-          <div className="space-y-4">
-            {[...Array(5)].map((_, i) => (
-              <Card key={i}>
-                <CardHeader>
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-3 w-1/2" />
-                </CardHeader>
-                <CardContent>
-                  <Skeleton className="h-3 w-full" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : todos.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <BarChart3 className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium mb-2">No todos found</h3>
-              <p className="text-muted-foreground text-center mb-4">
-                {Object.keys(filters).length > 0
-                  ? "No todos match your current filters. Try adjusting your search criteria."
-                  : "Get started by creating your first todo!"}
-              </p>
-              {Object.keys(filters).length === 0 && (
-                <CreateTodoDialog onCreate={createTodo} />
-              )}
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-4">
-            {todos.map((todo) => (
-              <TodoCard
-                key={todo.id}
-                todo={todo}
-                onToggle={toggleTodo}
-                onDelete={deleteTodo}
-                onUpdate={updateTodo}
-              />
-            ))}
-          </div>
-        )}
+        {/* Main Content Area */}
+        <motion.div
+          key={viewMode}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          {todos.length === 0 && !loading ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <BarChart3 className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-medium mb-2">No tasks found</h3>
+                <p className="text-muted-foreground text-center mb-4">
+                  {Object.keys(filters).some(key => filters[key as keyof typeof filters])
+                    ? "No tasks match your current filters. Try adjusting your search criteria."
+                    : "Get started by creating your first task!"}
+                </p>
+                {!Object.keys(filters).some(key => filters[key as keyof typeof filters]) && (
+                  <CreateTodoDialog onCreate={createTodo} />
+                )}
+              </CardContent>
+            </Card>
+          ) : viewMode === 'kanban' ? (
+            <KanbanBoard
+              todos={todos}
+              loading={loading}
+              onStatusChange={handleStatusChange}
+              onToggle={toggleTodo}
+              onDelete={deleteTodo}
+              onUpdate={updateTodo}
+            />
+          ) : (
+            <ListView
+              todos={todos}
+              loading={loading}
+              onToggle={toggleTodo}
+              onDelete={deleteTodo}
+              onUpdate={updateTodo}
+            />
+          )}
+        </motion.div>
 
         {/* Pagination */}
-        {totalPages > 1 && (
+        {totalPages > 1 && viewMode === 'list' && (
           <div className="mt-8">
             <Pagination
               currentPage={page}
@@ -182,6 +212,9 @@ export const Dashboard = () => {
           </div>
         )}
       </main>
+
+      {/* Quick Add Floating Button */}
+      <QuickAdd onCreate={createTodo} />
     </div>
   );
 };

@@ -6,13 +6,31 @@ export interface User {
   createdAt: string;
 }
 
+export interface Subtask {
+  id: string;
+  title: string;
+  completed: boolean;
+  createdAt: string;
+}
+
+export interface Label {
+  id: string;
+  name: string;
+  color: string;
+}
+
+export type TaskStatus = 'todo' | 'in-progress' | 'done';
+
 export interface Todo {
   id: string;
   title: string;
   description: string;
   completed: boolean;
+  status: TaskStatus;
   priority: 'low' | 'medium' | 'high';
   dueDate?: string;
+  labels: Label[];
+  subtasks: Subtask[];
   userId: string;
   createdAt: string;
   updatedAt: string;
@@ -43,6 +61,7 @@ export interface CreateTodoRequest {
 
 export interface UpdateTodoRequest extends Partial<CreateTodoRequest> {
   completed?: boolean;
+  status?: 'todo' | 'in-progress' | 'done';
 }
 
 export interface TodosResponse {
